@@ -1,0 +1,51 @@
+From be21eb0451766bc9e96a08af7ba5d3717bcdb274 Mon Sep 17 00:00:00 2001
+From: Vikas Manocha <vikas.manocha@st.com>
+Date: Tue, 7 May 2019 15:10:46 -0700
+Subject: [PATCH] _sbrk: use main sp instead of current sp to check heap &
+ stack collision
+
+_sbrk is used mainly by malloc() to allocate heap area. Before
+allocating more space to heap or memory from heap, it is normal practice
+to make sure this allocation does not overlap with stack pointer (or SP
++ min_space_for_stack).
+
+This check passes when your float printf() is in main.c  as the stack
+pointer in this case of MSP which is at the top of RAM (- stack in use).
+The same check when done from task/thread fails as the stack pointer
+(PSP) is assigned space in the heap if dynamic allocation is
+chosen(heap_x.c) or in text area when static allocation is chosen
+(configSUPPORT_STATIC_ALLOCATION). In both cases, PSP is below heap area
+& is treated as heap/stack collision.
+
+The correct implementation is to check heap/stack collision/overlap with
+MSP.
+
+Signed-off-by: Vikas Manocha <vikas.manocha@st.com>
+---
+ Src/syscalls.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Src/syscalls.c b/Src/syscalls.c
+index d5a72c4..a18ef9c 100644
+--- a/Src/syscalls.c
++++ b/Src/syscalls.c
+@@ -34,6 +34,7 @@
+ #include <time.h>
+ #include <sys/time.h>
+ #include <sys/times.h>
++#include <cmsis_compiler.h>
+ 
+ 
+ /* Variables */
+@@ -103,7 +104,7 @@ caddr_t _sbrk(int incr)
+ 		heap_end = &end;
+ 
+ 	prev_heap_end = heap_end;
+-	if (heap_end + incr > stack_ptr)
++	if (heap_end + incr > (char *)__get_MSP())
+ 	{
+ //		write(1, "Heap and stack collision\n", 25);
+ //		abort();
+-- 
+2.7.4
+
